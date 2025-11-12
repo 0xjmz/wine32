@@ -1,0 +1,43 @@
+#!/bin/bash
+
+WINEVER="${WINEVER:-10.18}"
+WINEIMAGE="wine-${WINEVER}"
+WINEDIR="$HOME/.cache/$WINEIMAGE"
+WINEPREFIX="${WINEPREFIX:-$HOME/.wine-32}"
+
+if [[ ! -e $WINEDIR || -z $(podman --root $WINEDIR images --format "{{.Repository}}" $WINEIMAGE) ]]; then
+mkdir -p ${WINEDIR}
+cd ${WINEDIR}
+cat << EOF >Dockerfile
+FROM ubuntu:24.04
+ARG WINEVER="10.18"
+# Update package lists and install required packages
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y \
+        gnupg2 \
+        wget \
+    && mkdir -pm755 /etc/apt/keyrings \
+    && wget -O - https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor -o /etc/apt/keyrings/winehq-archive.key - \
+    && wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/noble/winehq-noble.sources \
+    && apt update \
+    && apt install -y winehq-devel:i386=${WINEVER}~noble-1 wine-devel-i386=${WINEVER}~noble-1 wine-devel:i386=${WINEVER}~noble-1 \
+    && apt install -y libgl1:i386 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+EOF
+podman --root ${WINEDIR} build --build-arg WINEVER=$WINEVER . -t ${WINEIMAGE}
+fi 
+
+podman --root $WINEDIR run -it --privileged --rm \
+	$PODMANOPTS \
+	-v /tmp/.X11-unix:/tmp/.X11-unix:ro \
+	-v $WINEPREFIX:/tmp/wine \
+	-e PULSE_SERVER=unix:/run/user/$(id -u)/pulse/native \
+	-v /run/user/$(id -u)/pulse/native:/run/user/$(id -u)/pulse/native \
+	-v $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
+	-e DISPLAY=$DISPLAY \
+	-e WINEPREFIX=/tmp/wine \
+	-e WINEDEBUG=-all \
+	${WINEIMAGE} \
+	wine "$@"
