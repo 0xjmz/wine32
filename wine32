@@ -1,6 +1,6 @@
 #!/bin/bash
 
-WINEVER="${WINEVER:-10.18}"
+WINEVER="${WINEVER:-11.3}"
 WINEIMAGE="wine-${WINEVER}"
 WINEDIR="$HOME/.cache/$WINEIMAGE"
 WINEPREFIX="${WINEPREFIX:-$HOME/.wine-32}"
@@ -32,12 +32,18 @@ fi
 podman --root $WINEDIR run -it --privileged --rm \
 	$PODMANOPTS \
 	-v /tmp/.X11-unix:/tmp/.X11-unix:ro \
-	-v $WINEPREFIX:/tmp/wine \
+	-v "$HOME:$HOME" \
+	-v "$WINEPREFIX:$WINEPREFIX" \
+	-v "$PWD:$PWD" \
+	-w "$PWD" \
 	-e PULSE_SERVER=unix:/run/user/$(id -u)/pulse/native \
 	-v /run/user/$(id -u)/pulse/native:/run/user/$(id -u)/pulse/native \
 	-v $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
+	-e $XDG_RUNTIME_DIR:$XDG_RUNTIME_DIR \
 	-e DISPLAY=$DISPLAY \
-	-e WINEPREFIX=/tmp/wine \
+	-e WINEPREFIX="$WINEPREFIX" \
 	-e WINEDEBUG=-all \
+	-e HOME="$HOME" \
+	-e USER="$USER" \
 	${WINEIMAGE} \
 	wine "$@"
